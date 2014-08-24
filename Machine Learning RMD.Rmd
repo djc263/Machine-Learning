@@ -1,0 +1,85 @@
+---
+title: "Machine Learning"
+author: "Dave"
+date: "Sunday, August 24, 2014"
+output: html_document
+---
+Goal; To predict the classification of an exercise given quantitative data on the movement of the subject at that time
+
+Method: Random Forest Classification Model
+
+Initial work is done to pull the data set in from the source file and partition it into a 70% testing and 30% training set.
+For brevity, summaries and graphs at this stage are suppressed. Any fields less than 5% populated are removed.
+Preprocessing is done to center and scale the variables prior to modeling. Note that all steps applied to the training model will similarly be applied to the testing set (testing) and the output predictions (pmltesting).
+
+
+```{r}
+
+set.seed(12345)
+pmltesting<-read.csv("pml-testing.csv",na.strings=c("","NA"))
+pmltraining<-read.csv("pml-training.csv",na.strings=c("","NA"))
+library(caret)
+library(ggplot2)
+library(randomForest)
+
+inTrain <- createDataPartition(pmltraining$classe, p = .7,list=FALSE)
+training <- pmltraining[ inTrain,]
+testing <- pmltraining[-inTrain,]
+
+
+##some values are above 95% NA, these are removed now
+removena1<-colSums(is.na(training))<(.95*nrow(training))
+training2<-training[,removena1]
+testing2<-testing[,removena1]
+pmltesting2<-pmltesting[,removena1]
+
+##summary(training2)
+
+##remove row nume user name, window, and timestamp feilds at start of training set
+training3<-training2[,-c(1:7)]
+testing3<-testing2[,-c(1:7)]
+pmltesting3<-pmltesting2[,-c(1:7)]
+
+test<-sapply(training3,is.numeric)
+training3<-training3[complete.cases(training3),]
+
+##featurePlot(x=training,y=pmltraining$classe,type=pairs)
+
+#classe is the result variable based on how well they did the exercise
+
+prepml<-preProcess(training3[,-53],method=c("center","scale"))
+training4<-predict(prepml,training3[,-53])
+classe<-training3$classe
+training4<-cbind(training4,classe)
+
+testing4<-predict(prepml,testing3[,-53])
+classe<-testing3$classe
+testing4<-cbind(testing4,classe)
+
+pmltesting4<-predict(prepml,pmltesting3[,-53])
+
+prepml<-preProcess(training4[,-53],method="pca",thresh=.90)
+training5<-predict(prepml,training4[,-53])
+classe<-training3$classe
+training5<-cbind(training5,classe)
+
+```
+
+Once preprocessing is completed, a random forest model is generated on the training data set. The summary is below along with the comparable table from the 30% testing set (testing) for cross-validation.
+After the model is generated, it is printed for the reader and aplied to the testing set (suggesting an error rate of about .53% or above 99% accuracy).
+A table of values and overall accuracy are shown below on the testing (cross-validation) set.
+We get about 99.2% predictive accuracy on the testing set.
+```{r}
+modFit<-randomForest(classe~ .,data=training4,ntree=500)
+
+pred <- predict(modFit,testing4)
+
+modFit
+table(pred,testing4$classe)
+accuracy<-sum(pred==testing4$classe)/nrow(testing4)
+accuracy
+
+x <- predict(modFit,pmltesting4)
+```
+
+X is the string of (correct) predictions submitted for the assignment after cross-validation.
